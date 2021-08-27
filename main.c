@@ -15,9 +15,12 @@
 
 // CONFIG
 #define BORDER_WIDTH 1
-#define COLOR        "#aaaaaa"
+#define BORDER_COLOR "#aaaaaa"
 
-// UNCOMMENT TO ENABLE DEBUG O-O
+// COMMENT TO DISABLE ROUNDED CORNERS
+#define BORDER_ROUND
+
+// UNCOMMENT TO ENABLE DEBUG
 //#define DEBUG 
 
 static Display *display;
@@ -149,7 +152,7 @@ int main() {
 		    attr.colormap = XCreateColormap(display, root, vinfo.visual, AllocNone);
 		
 		    XColor color;
-		    XParseColor(display, attr.colormap, COLOR, &color);
+		    XParseColor(display, attr.colormap, BORDER_COLOR, &color);
 		    XAllocColor(display, attr.colormap, &color);
 		    window_return = XCreateWindow(
 		    	display, root, 
@@ -183,51 +186,35 @@ int main() {
 			break;
 
 		case Expose:
-			XPoint points[] = {
-				/*{ x, y, w, BORDER_WIDTH },
-		        { x, y, BORDER_WIDTH, h },
-		        { x, h - BORDER_WIDTH, w, BORDER_WIDTH },
-		        { w - BORDER_WIDTH, y, BORDER_WIDTH, h }
-		        { w - BORDER_WIDTH, 0               , BORDER_WIDTH, h            },
-		        { 0               , h - BORDER_WIDTH, w           , BORDER_WIDTH },
-		        { 0               , 0               , w           , BORDER_WIDTH },
-   		        { 0               , 0               , BORDER_WIDTH, h            },
-		        // dots to make it good with circular windows
-
-		        // { 1, 1, 1, 2 },
-		        // { 2, 1, 1, 1 },
-		        // {w - 2, 1, 1, 2},
-		        // {w - 1, 1, 1, 1}
-				{0, 0},
-				{w, 0},
-				{w, h},
-				{0, h},
-				{0, 0}*/
-
-//                X      Y           P
-				{ 1    , 0     },
-				{ w - 1, 0     },
-				{ w - 1, 1     }, // p
-				{ w    , 1     }, // pr
-				{ w    , h - 1 },
-				{ w - 1, h - 1 }, // p
-				{ w - 1, h     }, // pr
-				{ 1    , h     },
-				{ 1    , h - 1 }, // p
-				{ 0    , h - 1 }, // pr
-				{ 0    , 1     },
-				{ 1    , 1     }, // p
-
-			};
-
 			XSetForeground(display, gc, color.pixel);
-			/*if (x1 == 0) {
-				XDrawRectangles(display, window_return, gc, rectangles, 2);
-				XFillRectangles(display, window_return, gc, rectangles, 2);
-			} else {*/
-	            XDrawLines(display, window_return, gc, points, 12, CoordModeOrigin);
-	            //XFillRectangles(display, window_return, gc, rectangles, 4);
-			//}
+			#ifdef BORDER_ROUND
+				XPoint points[] = {
+//					  X      Y           P
+					{ 1    , 0     },
+					{ w - 1, 0     },
+					{ w - 1, 1     }, // p
+					{ w    , 1     }, // pr
+					{ w    , h - 1 },
+					{ w - 1, h - 1 }, // p
+					{ w - 1, h     }, // pr
+					{ 1    , h     },
+					{ 1    , h - 1 }, // p
+					{ 0    , h - 1 }, // pr
+					{ 0    , 1     },
+					{ 1    , 1     }, // p
+				};
+				XDrawLines(display, window_return, gc, points, 12, CoordModeOrigin);
+			#else
+				XPoint points[] = {
+//					  X      Y
+					{ 0    , 0     },
+					{ w    , 0     },
+					{ w    , h     },
+					{ 0    , h     },
+					{ 0    , 0     },
+				};
+				XDrawLines(display, window_return, gc, points, 4, CoordModeOrigin);
+			#endif
             XSync(display, False);
 			break;
 			
