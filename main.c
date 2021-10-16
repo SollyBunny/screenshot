@@ -14,11 +14,8 @@
 #define MAX(a, b) ((a) > (b)) ? (a) : (b)
 
 // CONFIG
-#define BORDER_WIDTH 1
-#define BORDER_COLOR "#aaaaaa"
-
-// COMMENT TO DISABLE ROUNDED CORNERS
-#define BORDER_ROUND
+#define BORDER_WIDTH  1
+#define BORDER_COLOR  "#aaaaaa"
 
 // UNCOMMENT TO ENABLE DEBUG
 //#define DEBUG 
@@ -142,8 +139,8 @@ int main() {
 				&sw, 
 				&usw
 			);
-			// x1 += BORDER_WIDTH;
-			// y1 += BORDER_WIDTH;
+			x1++;//= BORDER_WIDTH;
+			y1++;//= BORDER_WIDTH;
 			
 		    XSetWindowAttributes attr = {0};
 		    XVisualInfo vinfo;
@@ -187,7 +184,7 @@ int main() {
 
 		case Expose:
 			XSetForeground(display, gc, color.pixel);
-			#ifdef BORDER_ROUND
+			/*#ifdef BORDER_ROUND
 				XPoint points[] = {
 //					  X      Y           P
 					{ 1    , 0     },
@@ -215,7 +212,18 @@ int main() {
 				};
 				XDrawLines(display, window_return, gc, points, 4, CoordModeOrigin);
 			#endif
+			*/
+			XPoint points[] = {
+//				  X      Y
+				{ (BORDER_WIDTH/2)  , (BORDER_WIDTH/2)   },
+				{ w+(BORDER_WIDTH*1.5), (BORDER_WIDTH/2)   },
+				{ w+(BORDER_WIDTH*1.5), h+(BORDER_WIDTH*1.5) },
+				{ (BORDER_WIDTH/2)  , h+(BORDER_WIDTH*1.5) },
+				{ (BORDER_WIDTH/2)  , (BORDER_WIDTH/2)   },
+			};
+			XDrawLines(display, window_return, gc, points, 5, CoordModeOrigin);
             XSync(display, False);
+            
 			break;
 			
 		case MotionNotify:
@@ -259,8 +267,8 @@ int main() {
 	image = XGetImage(
 		display, DefaultRootWindow(display), 
 		//x1, y1, x2 - x1, y2 - y1,
-		x + BORDER_WIDTH, y + BORDER_WIDTH, 
-		w - BORDER_WIDTH - BORDER_WIDTH, h - BORDER_WIDTH - BORDER_WIDTH,
+		x, y, 
+		w - (BORDER_WIDTH*2), h - (BORDER_WIDTH*2),
 		//1, 1, 50, 50,
 		AllPlanes,
 		ZPixmap
