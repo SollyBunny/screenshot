@@ -179,7 +179,7 @@ int main() {
 			XMapRaised(display, window_return);
 			XSync(display, False);	
 			
-			gcv.line_width = BORDER_WIDTH - 1;    
+			gcv.line_width = BORDER_WIDTH - 1;
 			gc = XCreateGC(display, window_return, GCLineWidth, &gcv);
 									
 			state = 1;
