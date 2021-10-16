@@ -3,11 +3,9 @@
 #include <X11/Xatom.h>
 #include <png.h>
 #include <stdio.h>
-#include <stdbool.h>
 #include <stdlib.h>
-#include <time.h>
 #include <unistd.h>
-#include <sys/stat.h>
+#include <dirent.h>
 
 #define MOUSEMASK (ButtonPressMask|ButtonReleaseMask|PointerMotionMask)
 #define MIN(a, b) ((a) < (b)) ? (a) : (b)
@@ -18,7 +16,7 @@
 #define BORDER_COLOR  "#aaaaaa"
 
 // UNCOMMENT TO ENABLE DEBUG
-//#define DEBUG 
+#define DEBUG 
 
 static Display *display;
 static int screen;
@@ -119,7 +117,7 @@ int main() {
 	int sw, x1, y1, x2, y2, x, y, w, h;
 	unsigned int usw;
 
-	bool state = 0;
+	int state = 0;
 	if (XGrabPointer(display, root, False, MOUSEMASK, GrabModeAsync, GrabModeAsync,
 		None, None, CurrentTime) != GrabSuccess)
 		return 0;
@@ -147,7 +145,10 @@ int main() {
 		
 		    XMatchVisualInfo(display, screen, 32, TrueColor, &vinfo);
 		    attr.colormap = XCreateColormap(display, root, vinfo.visual, AllocNone);
-		
+		    
+			
+		    
+
 		    XColor color;
 		    XParseColor(display, attr.colormap, BORDER_COLOR, &color);
 		    XAllocColor(display, attr.colormap, &color);
@@ -159,7 +160,13 @@ int main() {
 				CWColormap | CWBorderPixel | CWBackPixel, &attr
 			);
 
-			
+			long hints[5] = {2, 0, 0, 0, 0};
+		    
+			XChangeProperty(
+				display, window_return, 
+				XInternAtom(display, "_MOTIF_WM_HINTS", False), 
+				XA_ATOM, 32, PropModeReplace, (unsigned char *)&hints, 5
+			);
 			
 			/*long value = XInternAtom(
 				display, "_NET_WM_WINDOW_TYPE_DOCK", False
@@ -273,23 +280,28 @@ int main() {
 		AllPlanes,
 		ZPixmap
 	);
-	
-	struct stat sb;
-	char filename[64];
 
-	if (stat("~/Screenshots", &sb) == 0 && S_ISDIR(sb.st_mode)) {
+	
+	char filename[64];
+	char *homedir = getenv("HOME");
+
+	sprintf(filename, "%s/Screenshots", homedir);
+	DIR *pdir = opendir(filename);
+
+	if (pdir == NULL) {
+
+		printf("Warn: ~/Screenshots doesn't exist\n");
+		sprintf(filename, "/tmp/sc.png");
 		
+	} else {
+
+		closedir(pdir);
+
 		time_t t = time(NULL);
 		struct tm tm = *localtime(&t);
 
-		sprintf(filename, "~/Screenshots/%d-%02d-%02d %02d:%02d:%02d.png", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+		sprintf(filename, "%s/Screenshots/%d-%02d-%02d %02d:%02d:%02d.png", homedir, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 
-	} else {
-
-		printf("Warn: ~/Screenshots doesn't exist\n");
-		//sprintf(filename, "/tmp/screenshot%u", (unsigned)time(NULL));
-		sprintf(filename, "/tmp/sc.png");
-		
 	}
 
 	#ifdef DEBUG
