@@ -139,7 +139,8 @@ int main() {
 			);
 			x1++;//= BORDER_WIDTH;
 			y1++;//= BORDER_WIDTH;
-			
+			x2 = x1++;
+			y2 = y1++;
 		    XSetWindowAttributes attr = {0};
 		    XVisualInfo vinfo;
 		
@@ -158,6 +159,14 @@ int main() {
 		    	1, vinfo.depth,
 				InputOutput, vinfo.visual,
 				CWColormap | CWBorderPixel | CWBackPixel, &attr
+			);
+
+			Atom atoms[2] = { XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", False), None };
+			XChangeProperty(
+				display, 
+				window_return, 
+				XInternAtom(display, "_NET_WM_STATE", False),
+				XA_ATOM, 32, PropModeReplace, (unsigned char *)atoms, 1
 			);
 
 			/*long hints[5] = {2, 0, 0, 0, 0};
