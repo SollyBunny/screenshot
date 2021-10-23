@@ -5,4 +5,8 @@ run:
 	./screenshot
 
 install:
+	-rm /usr/bin/screenshot
 	ln -s "$(shell pwd)/screenshot" "/usr/bin/screenshot"
+
+uninstall:
+	rm /usr/bin/screenshot
