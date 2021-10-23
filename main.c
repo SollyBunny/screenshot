@@ -160,13 +160,13 @@ int main() {
 				CWColormap | CWBorderPixel | CWBackPixel, &attr
 			);
 
-			long hints[5] = {2, 0, 0, 0, 0};
+			/*long hints[5] = {2, 0, 0, 0, 0};
 		    
 			XChangeProperty(
 				display, window_return, 
 				XInternAtom(display, "_MOTIF_WM_HINTS", False), 
 				XA_ATOM, 32, PropModeReplace, (unsigned char *)&hints, 5
-			);
+			);*/
 			
 			/*long value = XInternAtom(
 				display, "_NET_WM_WINDOW_TYPE_DOCK", False
