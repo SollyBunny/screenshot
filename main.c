@@ -200,8 +200,6 @@ int main(int argc, char* argv[]) {
 				XSync(display, False);
 		}
 	} while (e.type != ButtonRelease);
-
-	
 	
 	XUngrabPointer(display, CurrentTime);
 	XDestroyWindow(display, window);
