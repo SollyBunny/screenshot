@@ -25,6 +25,7 @@ static Window     window;
 static GC         gc;
 static XGCValues  gcv;
 static XEvent     e;
+static XImage    *image;
 
 /* LSBFirst: BGRA -> RGBA */
 static void convertrow_lsb(unsigned char *drow, unsigned char *srow, XImage *img) {
@@ -99,11 +100,23 @@ void draw() {
 	XDrawLines(display, window, gc, points, 5, CoordModeOrigin);
 }
 
-int main() {
-
+int main(int argc, char* argv[]) {
+	(void)argv;
+	
 	display = XOpenDisplay(NULL);
 	screen  = XDefaultScreen(display);
 	root    = RootWindow(display, screen);
+
+	if (argc > 1) {
+		image = XGetImage(
+			display, root, 
+			0, 0,
+			DisplayWidth(display, screen), DisplayHeight(display, screen),
+			AllPlanes,
+			ZPixmap
+		);
+		goto l_end;
+	}
 
 	if (XGrabPointer(
 		display, root, 
@@ -187,6 +200,8 @@ int main() {
 				XSync(display, False);
 		}
 	} while (e.type != ButtonRelease);
+
+	
 	
 	XUngrabPointer(display, CurrentTime);
 	XDestroyWindow(display, window);
@@ -195,15 +210,16 @@ int main() {
 	#ifdef DEBUG
 		printf("Info: Width: %d Height: %d\n", w, h);
 	#endif
-	
-	XImage *image;
+
 	image = XGetImage(
-		display, DefaultRootWindow(display), 
+		display, root, 
 		x + BORDER_WIDTH, y + BORDER_WIDTH, 
 		w - BORDER_WIDTH - BORDER_WIDTH, h - BORDER_WIDTH - BORDER_WIDTH,
 		AllPlanes,
 		ZPixmap
 	);
+
+	l_end:
 	
 	char filename[64];
 	char *homedir = getenv("HOME");
