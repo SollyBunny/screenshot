@@ -1,7 +1,5 @@
 # screenshot
 A very smowl xlib c screenshot tool
-It will save the file into ~/Screenshots if it exists and will copy the image to clipboard
-Just drag the area you want
 
 ### Config
 Config is in the first few lines of `main.c`  
