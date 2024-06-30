@@ -114,9 +114,9 @@ int main(int argc, char* argv[]) {
 
 	// Create Window
 	win = XCreateWindow(
-    	disp, root, 
-    	0, 0, W, H, 
-    	0, CopyFromParent,
+		disp, root, 
+		0, 0, W, H, 
+		0, CopyFromParent,
 		InputOutput, CopyFromParent,
 		attrsmask, &attrs
 	);
@@ -240,7 +240,7 @@ int main(int argc, char* argv[]) {
 		home = getenv("HOME");
 		if (!home) {
 			struct passwd *pw = getpwuid(getuid());
-            home = pw->pw_dir;
+			home = pw->pw_dir;
 		}
 	}
 	sprintf(fn, OPTFORMAT,
@@ -255,23 +255,29 @@ int main(int argc, char* argv[]) {
 	static unsigned char* fd = NULL;
 	static size_t fs = 0;
 	if (r < g && g < b) { // RGB
-		fs = WebPEncodeRGB((unsigned char *)img->data, img->width, img->height, img->bytes_per_line / 4 * 3, OPTQUALITY, &fd);
+		fs = WebPEncodeRGB((unsigned char *)img->data, img->width, img->height, img->bytes_per_line * 3 / 4, OPTQUALITY, &fd);
 		debug("Pixel format = RGB");
 	} else if (b < g && g < r) { // BGR
-		fs = WebPEncodeBGR((unsigned char *)img->data, img->width, img->height, img->bytes_per_line / 4 * 3, OPTQUALITY, &fd);
+		fs = WebPEncodeBGR((unsigned char *)img->data, img->width, img->height, img->bytes_per_line * 3 / 4, OPTQUALITY, &fd);
 		debug("Pixel format = BGR");
 	} else {
 		debug("Unsupported pixel format %lu %lu %lu", r, g, b);
 		die("Unsupported pixel format");
 	}
-	debug("Image size %dx%d (%d bytes/line)", img->width, img->height, img->bytes_per_line);
-	
-	if (!fwrite(fd, 1, fs, fp)) die("Failed to write to %s", fn);
+	debug(
+		"Image size %dx%d %d bytes (%d bytes/line) -> %dx%d %ld bytes (%d bytes/line)", 
+		img->width, img->height, img->width * img->height, img->bytes_per_line,
+		img->width, img->height, fs, img->bytes_per_line * 3 / 4
+	);
+	if (fs <= 0) die("Failed to encode webp");
 
-	// Copy to clipboard (for some reason a mime type of image/webp doesn't work for some applications)
-	char* args[] = {"xclip", "-selection", "clipboard", "-t", "image/png", fn, NULL};
-	execvp(args[0], args);
+	static size_t written = 0;
+	written = fwrite(fd, 1, fs, fp);
+	if (!written) die("Failed to write to %s", fn);
+	if (written != fs) die("Failed to fully write to %s, wrote %lu / %lu bytes", fn, written, fs);
 
+	static int failed = 1;
+	failed = 0;
 	end:
 
 		XUngrabPointer(disp, CurrentTime);
@@ -282,6 +288,13 @@ int main(int argc, char* argv[]) {
 		if (gc) XFreeGC(disp, gc);
 		if (win) XDestroyWindow(disp, win);
 		if (disp) XCloseDisplay(disp);
+
+		if (!failed) {
+			printf("%s\n", fn);
+			// Copy to clipboard (for some reason a mime type of image/webp doesn't work for some applications)
+			char* args[] = {"xclip", "-selection", "clipboard", "-t", "image/png", fn, NULL};
+			execvp(args[0], args);
+		}
 	
 	return 0;
 }
