@@ -1,64 +1,78 @@
 // Config
 
-#define DEBUG
-#define OPTDIR ".local/share/screenshots"
+#define OPTDIR "~/.local/share/screenshots"
+#define OPTFORMAT "%s%s/%d-%02d-%02d_%02d:%02d:%02d.webp"
 #define OPTQUALITY 80
-#define OPTFPS 30
-#define OPTWIDTH 3
+#define OPTWIDTH 1
 #define OPTR 255
-#define OPTG 0
+#define OPTG 255
 #define OPTB 255
 
-//
+// Include
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
 #include <X11/cursorfont.h>
+
 #include <webp/encode.h>
+
+#include <unistd.h>
+#include <pwd.h>
+
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
+#include <string.h>
 
-static Display   *disp;
-static int        scrn;
-static Window     root;
+// Statics
+
+static Display* disp;
+static int      scrn;
+static Window   root;
+
+#ifdef OPTDIR
+	static char* dir = OPTDIR;
+#else
+	static char* dir = "/tmp/";
+#endif
 
 static unsigned long int r, g, b;
 static Time lasttime;
-static Window win;
+static Window win = 0;
 static XEvent e;
-static XImage *img;
-static GC gc;
+static XImage* img = NULL;
+static GC gc = NULL;
+static Pixmap backbuffer = 0;
 static XGCValues gcv;
+
 static XWindowAttributes _xwa;
 #define W _xwa.width
 #define H _xwa.height
 
-XPoint rectpts[] = {
-   // X  Y
+#define die(...) { printf("\033[1;31mError:\033[0m "); printf(__VA_ARGS__); putchar('\n'); goto end; }
+#ifdef DEBUG
+	#define debug(...) { printf("\033[1;33mDebug:\033[0m "); printf(__VA_ARGS__); putchar('\n'); }
+#else
+	#define debug(...) {}
+#endif
+
+static XPoint rectpts[] = { // pts used to draw rect
+//    X  Y
 	{ 0, 0 },
 	{ 0, 0 },
 	{ 0, 0 },
 	{ 0, 0 },
 	{ 0, 0 },
-}; // pts used to draw rect
+};
 #define rectx rectpts[0].x
 #define recty rectpts[0].y
-int rectw;
-int recth;
+static int rectw;
+static int recth;
 
-int main(int argc, char* argv[]) {
-	(void)argv;
-	(void)argc;
+//
 
-	// Init X
-	disp = XOpenDisplay(NULL);
-	scrn = XDefaultScreen(disp);
-	root = XRootWindow(disp, scrn);
-	XGetWindowAttributes(disp, root, &_xwa); // allow use of W, H (screen size)
-
+static inline int screenshot() {
 	// Get Screen
 	img = XGetImage(
 		disp, root, 
@@ -67,13 +81,36 @@ int main(int argc, char* argv[]) {
 		AllPlanes,
 		ZPixmap
 	);
+	if (img == NULL) return 0;
 	r = img->red_mask;
 	g = img->green_mask;
 	b = img->blue_mask;
+	return 1;
+}
 
-	// Skip selection step (full screenshot) if arg provided
-	if (argc > 1)
-		goto l_noselection;
+int main(int argc, char* argv[]) {
+	(void)argv;
+	(void)argc;
+
+	// Init X
+	disp = XOpenDisplay(NULL);
+	if (disp == NULL) die("Failed to open display");
+	scrn = XDefaultScreen(disp);
+	root = XRootWindow(disp, scrn);
+	if (XGetWindowAttributes(disp, root, &_xwa) == 0) // allow use of W, H (screen size)
+		die("Failed to get root window size");
+
+	// Arg parse
+	if (argc > 1) { // If there's an arg, take a full screenshot
+		if (!screenshot()) die("Failed to get screenshot image");
+		goto noselection;
+	}
+
+	// Override redirect flag
+	static XSetWindowAttributes attrs;
+	static unsigned long attrsmask = 0;
+	attrs.override_redirect = True;
+	attrsmask |= CWOverrideRedirect;
 
 	// Create Window
 	win = XCreateWindow(
@@ -81,10 +118,22 @@ int main(int argc, char* argv[]) {
     	0, 0, W, H, 
     	0, CopyFromParent,
 		InputOutput, CopyFromParent,
-		0,
-		NULL
+		attrsmask, &attrs
 	);
+	if (!win) die("Failed to create window");
+
+	// Store name
 	XStoreName(disp, win, "screenshot");
+	// Transient for (root)
+	XSetTransientForHint(disp, win, root);
+	// Dialog type window
+	Atom wm_window_type = XInternAtom(disp, "_NET_WM_WINDOW_TYPE", False);
+	Atom wm_window_type_dialog = XInternAtom(disp, "_NET_WM_WINDOW_TYPE_DIALOG", False);
+	XChangeProperty(
+		disp, win, wm_window_type, XA_ATOM, 32,
+		PropModeReplace, (unsigned char *)&wm_window_type_dialog, 1
+	);
+	// Get exposure events
 	XSelectInput(disp, win, ExposureMask);
 
 	// Create GC
@@ -93,6 +142,9 @@ int main(int argc, char* argv[]) {
 	gc = XCreateGC(disp, win, GCLineWidth, &gcv);
 	XSetForeground(disp, gc, (OPTR << 16) + (OPTG << 8) + OPTB);
 
+	// Create backbuffer
+	backbuffer = XCreatePixmap(disp, win, W, H, 24);
+
 	// Grab Pointer
 	if (XGrabPointer(
 		disp, root,
@@ -100,31 +152,30 @@ int main(int argc, char* argv[]) {
 		GrabModeAsync, GrabModeAsync,
 		None, XCreateFontCursor(disp, XC_sizing), 
 		CurrentTime
-	) != GrabSuccess) {
-		#ifdef DEBUG
-			printf("Debug: Failed to grab mouse\n");
-		#endif
-		return -1;
-	}
+	) != GrabSuccess) die("Failed to grab mouse");
+
+	// Wait for first Button Press
+	do {
+		XNextEvent(disp, &e);
+	} while (e.type != ButtonPress);
+	if ((((XButtonEvent*)&e)->button) != Button1) goto end;
+	rectx = e.xbutton.x;
+	recty = e.xbutton.y;
+	rectw = 0;
+	recth = 0;
+
+	if (!screenshot()) die("Failed to get screenshot image");
 
 	// Raise/Map Window
 	XMapRaised(disp, win);
 	XSync(disp, False);
 
-	// Wait for first Button Press
-	do {
-		XMaskEvent(disp, ButtonPressMask, &e);		
-	} while (e.type != ButtonPress);
-	rectx = e.xbutton.x;
-	recty = e.xbutton.y;
-
-	#ifdef DEBUG
-		printf("Debug: Starting selection\n");
-	#endif
+	debug("Starting selection");
 	
-	// Draw Rect
+	// Main loop
+	XPutImage(disp, win, gc, img, 0, 0, 0, 0, W, H);
 	do {
-		XMaskEvent(disp, ButtonReleaseMask|PointerMotionMask|ExposureMask, &e);
+		XNextEvent(disp, &e);
 		if (e.type == MotionNotify) {
 			rectw = e.xbutton.x - rectx;
 			recth = e.xbutton.y - recty;
@@ -132,23 +183,17 @@ int main(int argc, char* argv[]) {
 			rectpts[2].y =  recth;
 			rectpts[3].x = -rectw;
 			rectpts[4].y = -recth;
-			#ifdef DEBUG
-				printf("Debug: @ %d %d # %d %d\n", rectx, recty, rectw, recth);
-			#endif
-			if ((e.xmotion.time - lasttime) > (1000 / OPTFPS)) {
-				lasttime = e.xmotion.time;
-				XPutImage(disp, win, gc, img, 0, 0, 0, 0, W, H);
-				XDrawLines(disp, win, gc, rectpts, 5, CoordModePrevious);
-				XSync(disp, False);
-			}
+			debug("@ %d %d # %d %d", rectx, recty, rectw, recth);
+			lasttime = e.xmotion.time;
+			XPutImage(disp, backbuffer, gc, img, 0, 0, 0, 0, W, H);
+			XDrawLines(disp, backbuffer, gc, rectpts, 5, CoordModePrevious);
+			XCopyArea(disp, backbuffer, win, gc, 0, 0, W, H, 0, 0);
+			XSync(disp, False);
 		}
 	} while (e.type != ButtonRelease);
 
-	// Destroy window & ungrab
-	XUngrabPointer(disp, CurrentTime);
-	XDestroyWindow(disp, win);
-
 	// Fix coords
+	if (rectw == 0 || recth == 0) goto end; // Can't take a screenshot of nothing ey?
 	if (rectw < 0) {
 		rectx += rectw;
 		rectw *= -1;
@@ -160,7 +205,7 @@ int main(int argc, char* argv[]) {
 
 	// Take subimage
 	img = XSubImage(img, rectx, recty, rectw, recth);
-	l_noselection:
+	noselection:
 	XSync(disp, False); // Wait for screenshot to be processed / cropped
 
 	// Change xxxA to xxx (yay array manipulation)
@@ -185,74 +230,58 @@ int main(int argc, char* argv[]) {
 	*/
 
 	// Save file
-	FILE *fp;
-	char fn[64];
+	static FILE* fp = NULL;
+	static char fn[96];
+	static char* home = NULL;
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
 
-	#ifdef OPTDIR
-		sprintf(fn, "%s/"OPTDIR"/%d-%02d-%02d %02d:%02d:%02d.webp",
-			getenv("HOME"),
-			tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec
-		);
-		fp = fopen(fn, "wb");
-		if (fp == NULL) {
-	#endif
-		sprintf(fn, "/tmp/%d-%02d-%02d %02d:%02d:%02d.webp",
-			tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec
-		);
-		fp = fopen(fn, "wb");
-		if (fp == NULL) {
-			#ifdef DEBUG
-				printf("Debug: Failed to write to OPTDIR or /tmp/\n");
-			#endif
-			return 1;
+	if (dir[0] == '~') {
+		home = getenv("HOME");
+		if (!home) {
+			struct passwd *pw = getpwuid(getuid());
+            home = pw->pw_dir;
 		}
-		#ifdef DEBUG 
-		#ifdef OPTDIR
-			printf("Debug: Failed to write to OPTDIR\n");
-		#endif
-		#endif
-	#ifdef OPTDIR
-		}
-	#endif
-	#ifdef DEBUG
-		printf("Debug: Writing to %s\n", fn);
-	#endif
+	}
+	sprintf(fn, OPTFORMAT,
+		dir[0] == '~' ? home : "",
+		dir[0] == '~' ? dir + 1 : dir,
+		tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec
+	);
+	fp = fopen(fn, "wb");
+	if (fp == NULL) die("Can't open %s", fn);
+	debug("Writing to %s", fn);
 
-	unsigned char *fd;
-	size_t fs;
+	static unsigned char* fd = NULL;
+	static size_t fs = 0;
 	if (r < g && g < b) { // RGB
 		fs = WebPEncodeRGB((unsigned char *)img->data, img->width, img->height, img->bytes_per_line / 4 * 3, OPTQUALITY, &fd);
-		#ifdef DEBUG
-			printf("Debug: Pixel format = RGB\n");
-		#endif
+		debug("Pixel format = RGB");
 	} else if (b < g && g < r) { // BGR
 		fs = WebPEncodeBGR((unsigned char *)img->data, img->width, img->height, img->bytes_per_line / 4 * 3, OPTQUALITY, &fd);
-		#ifdef DEBUG
-			printf("Debug: Pixel format = BGR\n");
-		#endif
+		debug("Pixel format = BGR");
 	} else {
-		#ifdef DEBUG
-			printf("Debug: Unsupported pixel format %lu %lu %lu\n", r, g, b);
-		#endif
-		return 1;
+		debug("Unsupported pixel format %lu %lu %lu", r, g, b);
+		die("Unsupported pixel format");
 	}
-	#ifdef DEBUG
-		printf("Debug: Image size = %dx%d (%dbytes/line)\n", img->width, img->height, img->bytes_per_line);
-	#endif
+	debug("Image size %dx%d (%d bytes/line)", img->width, img->height, img->bytes_per_line);
 	
-	fwrite(fd, 1, fs, fp);
-	fclose(fp);
-	free(fd);
-	XDestroyImage(img);
-	
-	// Copy to clipboard (for some reason a mime type of image/webp doesn't work)
-	char *args[] = {"xclip", "-selection", "clipboard", "-t", "image/png", fn, NULL};
+	if (!fwrite(fd, 1, fs, fp)) die("Failed to write to %s", fn);
+
+	// Copy to clipboard (for some reason a mime type of image/webp doesn't work for some applications)
+	char* args[] = {"xclip", "-selection", "clipboard", "-t", "image/png", fn, NULL};
 	execvp(args[0], args);
 
-	// Close display
-	XCloseDisplay(disp);
+	end:
+
+		XUngrabPointer(disp, CurrentTime);
+		if (fd) free(fd);
+		if (fp) fclose(fp);
+		if (img) XDestroyImage(img);
+		if (backbuffer) XFreePixmap(disp, backbuffer);
+		if (gc) XFreeGC(disp, gc);
+		if (win) XDestroyWindow(disp, win);
+		if (disp) XCloseDisplay(disp);
 	
 	return 0;
 }

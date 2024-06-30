@@ -1,21 +1,24 @@
 # screenshot
-A very smowl xlib c screenshot tool
+A very smol xlib screenshot tool written in C
 
-### Config
+## Config
 Config is in the first few lines of `main.c`  
-`DEBUG`: Enables debug info!  
-`OPTDIR`: Specifies where to place screenshots (relative to home), if invalid or undefined /tmp/ is used  
+`DEBUG`: Enables debug info  
+`OPTDIR`: Specifies where to place screenshots, supports `~`, you must make this directory manually
 `OPTQUALITY`: The WEBP quality to use (where 0 is worst and 100 is best)  
-`OPTFPS`: How frequently to accept mouse move events (too high or low makes it laggy)  
 `OPTWIDTH`: The width of the selection outline  
-`OPTR/G/B`: The color of the selection outline  
+`OPT[R/G/B]`: The color of the selection outline  
 
-### Compiling
-You need xlib, xclip and libwebp  
+## Compiling
+Requires `xlib`, `xclip` and `libwebp`  
 Use `make` to compile  
-Use `make install` to syslink the executable to bin so you can just run "screenshot"  
+Use `make debug` to compile with debug info
 
-### Usage
+## Installing
+Run `make install` to install  
+Run `make uninstall` to uninstall  
+
+## Usage
 Run `screenshot` to select an area manually  
 Run `screenshot 1` to screenshot the whole screen
 

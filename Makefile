@@ -1,9 +1,21 @@
+
+NAME = screenshot
+PREFIX= /usr/local
+
+CC = cc
+LIBS = -lX11 -lwebp -O4
+FLAGS = -pedantic -Wall
+FLAGSDEBUG = -g -fsanitize=address -fno-omit-frame-pointer
+FLAGSRELEASE = -O4
+
 build:
-	gcc main.c -o screenshot -s -lX11 -lwebp -O4
+	gcc *.c -o $(NAME) $(FLAGS) $(FLAGSRELEASE) $(LIBS)
+
+debug:
+	gcc -DDEBUG *.c -o $(NAME) $(FLAGS) $(FLAGSDEBUG) $(LIBS)
 
 install:
-	rm -f "/usr/local/bin/screenshot"
-	ln -s "`pwd`/screenshot" "/usr/local/bin/screenshot"
+	cp "$(NAME)" "$(PREFIX)/bin/$(NAME)"
 
 uninstall:
-	-m -f "/usr/local/bin/screenshot"
+	rm -f "$(PREFIX)/bin/$(NAME)"
